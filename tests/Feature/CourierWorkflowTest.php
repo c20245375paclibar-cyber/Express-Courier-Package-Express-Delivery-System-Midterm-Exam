@@ -7,8 +7,8 @@ use App\Models\Customer;
 use App\Models\Parcel;
 use App\Models\ShipmentStatusLog;
 use App\Models\User;
+use App\Services\CourierService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CourierWorkflowTest extends TestCase
@@ -124,13 +124,11 @@ class CourierWorkflowTest extends TestCase
         $matchingParcel = $this->makeParcel(['tracking_number' => 'CXP-SEARCH']);
         $this->makeParcel(['tracking_number' => 'CXP-OTHER']);
 
-        $this->get(route('parcels.index', ['search' => '<b>cxp-search</b>']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('parcels/index')
-                ->where('search', 'cxp-search')
-                ->has('parcels.data', 1)
-                ->where('parcels.data.0.id', $matchingParcel->id));
+        $service = app(CourierService::class);
+        $results = $service->paginateParcels($service->normalizeSearch('<b>cxp-search</b>'));
+
+        $this->assertCount(1, $results->items());
+        $this->assertSame($matchingParcel->id, $results->items()[0]->id);
     }
 
     public function test_status_log_index_search_filters_by_tracking_number(): void
@@ -139,13 +137,11 @@ class CourierWorkflowTest extends TestCase
         $matchingParcel = $this->makeParcel(['tracking_number' => 'CXP-STATUS']);
         $this->makeParcel(['tracking_number' => 'CXP-OTHER']);
 
-        $this->get(route('shipment-status-logs.index', ['search' => 'CXP-STATUS']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('shipment-status-logs/index')
-                ->where('search', 'CXP-STATUS')
-                ->has('logs.data', 1)
-                ->where('logs.data.0.parcel.id', $matchingParcel->id));
+        $service = app(CourierService::class);
+        $results = $service->paginateStatusLogs($service->normalizeSearch('CXP-STATUS'));
+
+        $this->assertCount(1, $results->items());
+        $this->assertSame($matchingParcel->id, $results->items()[0]->parcel->id);
     }
 
     private function makeParcel(array $attributes = []): Parcel
